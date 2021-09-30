@@ -13,7 +13,7 @@ body_lookup2.put("third","<br />In order to prevent services being affected paym
 body_lookup2.put("fourth","<br />If payment is not received within 3 working days from today we will notify our legal department to arrange the start of debt recovery proceedings which could lead to additional legal expenses and a possible suspension of services .<br/><br/><br/><br/>If payment has been sent within the last 24 hours please accept our apologies and confirm with a remittance advice.<br/><br/><br/><br/>Credit Control Team<br/><br/>Creditcontrol@sysgroup.com<br/><br/>0151 305 2200");
 sub_line_lookup = {"first":"PAYMENT DUE (Email1)","second":"PAYMENT REQUEST FOR OVERDUE ACCOUNT(Email 2)","third":"URGENT PAYMENT REQUEST (Email 3)","fourth":"FINAL PAYMENT REQUEST (Email 4)"};
 //Fetch list of unpaid invoices that are overdue
-date_list = {-7};
+date_list = {-7,-14,-21,-28};
 today = now.toDate("yyyy-MM-dd");
 for each  offset in date_list
 {
