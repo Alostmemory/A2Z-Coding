@@ -1,0 +1,266 @@
+BOrgID = <OrgID>;
+companies_withstanding = List();
+email_targets = List();
+body_lookup1 = Map();
+body_lookup1.put("first","Dear Customer,<br/><br/>We hope you are well.<br/><br/>We just wanted to drop a quick note to remind you that the invoice(s) listed below are still due for payment;<br/>");
+body_lookup1.put("second","Dear Customer,<br/><br/>We have not still received a remittance for the invoice(s) listed below.<br/>");
+body_lookup1.put("third","Dear Customer,<br/><br/>The invoice(s) listed below are now EXTREMELY OVERDUE and the debt has been escalated to our senior management.<br/>");
+body_lookup1.put("fourth","Dear Customer,<br/><br/><br/><br/>We are disappointed to see that despite numerous reminders, payment has still not been received for the invoice(s) listed below.<br/>");
+body_lookup2 = Map();
+body_lookup2.put("first","<br />Copy invoice(s) are attached, should you have any queries please contact us on the details below or if not please confirm date of remittance.<br/><br/>Best regards<br/><br/>Credit Control Team<br/><br/>Creditcontrol@sysgroup.com<br/><br/>0151 305 2200");
+body_lookup2.put("second","<br />In line with your payment terms the invoice(s) are now overdue.<br/><br/>Please confirm a remittance date as soon as possible to avoid escalation of this debt<br/><br/>Kind Regards<br/><br/>Credit Control Team<br/><br/>Creditcontrol@sysgroup.com<br/><br/>0151 305 2200");
+body_lookup2.put("third","<br />In order to prevent services being affected payment must be received immediately, copies of the invoice(s) have been provided on the 2 previous reminders.<br/><br/>Credit Control Team<br/><br/>Creditcontrol@sysgroup.com<br/><br/>0151 305 2200");
+body_lookup2.put("fourth","<br />If payment is not received within 3 working days from today we will notify our legal department to arrange the start of debt recovery proceedings which could lead to additional legal expenses and a possible suspension of services .<br/><br/><br/><br/>If payment has been sent within the last 24 hours please accept our apologies and confirm with a remittance advice.<br/><br/><br/><br/>Credit Control Team<br/><br/>Creditcontrol@sysgroup.com<br/><br/>0151 305 2200");
+sub_line_lookup = {"first":"PAYMENT DUE (Email1)","second":"PAYMENT REQUEST FOR OVERDUE ACCOUNT(Email 2)","third":"URGENT PAYMENT REQUEST (Email 3)","fourth":"FINAL PAYMENT REQUEST (Email 4)"};
+//Fetch list of unpaid invoices that are overdue
+date_list = {-7};
+today = now.toDate("yyyy-MM-dd");
+for each  offset in date_list
+{
+	unpaid_list = List();
+	date_offset = today.addDay(offset);
+	date_month = date_offset.getMonth();
+	if(date_month.toList("").size() == 1)
+	{
+		date_month = "0" + date_month.toString();
+	}
+	date_day = date_offset.getDay();
+	if(date_day.toList("").size() == 1)
+	{
+		date_day = "0" + date_day.toString();
+	}
+	date_year = date_offset.getYear();
+	if(date_year.toList("").size() == 1)
+	{
+		date_year = "0" + date_year.toString();
+	}
+	date_search = date_year + "-" + date_month + "-" + date_day;
+	info date_search;
+	due_list = invokeurl
+	[
+		url :"https://books.zoho.eu/api/v3/invoices?organization_id=<OrgID>&balance_greater_than=0&status=overdue&due_date=" + date_search.toString()
+		type :GET
+		parameters:{"sort_column":"customer_name"}
+		connection:"booksinvoicereminder"
+	];
+	unpaid_list.addAll(due_list.get("invoices"));
+	proclist = Map();
+	track_map = Map();
+	info "unpaid list size: " + unpaid_list.size();
+	//find only duplicate entries
+	for each  invoice in unpaid_list
+	{
+		customer = invoice.getJSON("customer_id");
+		if(companies_withstanding.contains(customer.toString()) == false)
+		{
+			companies_withstanding.add(customer.toString());
+			invoice_list = List();
+			invoice_list.add(invoice);
+			proclist.put(customer.toString(),invoice_list);
+			track_list = List();
+			track_list.add(invoice.get("invoice_number"));
+			track_map.put(customer.toString(),track_list);
+		}
+		else
+		{
+			email_targets.add(customer.toString());
+			invoice_list = proclist.get(customer.toString());
+			invoice_list.add(invoice);
+			proclist.put(customer.toString(),invoice_list);
+			track_list = track_map.get(customer.toString());
+			track_list.add(invoice.get("invoice_number"));
+			track_map.put(customer.toString(),track_list);
+		}
+	}
+	info "companies withstanding size is: " + companies_withstanding.size();
+	info "email targets: " + email_targets;
+	// info "proclist: " + proclist;
+	//create date for later search
+	year = now.year().toString();
+	month = now.month().toString();
+	day = now.day().toString();
+	if(month.len() == 1)
+	{
+		month = "0" + month;
+	}
+	if(day.len() == 1)
+	{
+		day = "0" + day;
+	}
+	today = year + "-" + month + "-" + day;
+	info "today: " + today;
+	info "Qualifying invoices: " + track_map;
+	info "Qualifying Company list: " + companies_withstanding;
+	//EMAIL SENDER
+	for each  company in companies_withstanding
+	{
+		contact = zoho.books.getRecordsByID("Contacts",BOrgID,company).get("contact");
+		info "contact: " + contact.get("contact_name");
+		//fetch the companies invoices from proclist
+		customer_invoices = proclist.get(company.toString());
+		iterator = 0;
+		invoice_map = Map();
+		url_stack = List();
+		//Calculate earliest outstanding invoice date, then fetch payment URL
+		date_due = "2500-01-01";
+		for each  invoice in customer_invoices
+		{
+			invoice_status = invoice.get("status");
+			//info invoice_status;
+			if(invoice_status != "paid" && invoice_status != "draft")
+			{
+				due_date_check = invoice.getJSON("due_date");
+				//info due_date_check;
+				if(due_date_check.year() < date_due.year())
+				{
+					date_due = invoice.get("due_date");
+				}
+				else if(due_date_check.year() == date_due.year())
+				{
+					if(due_date_check.month() < date_due.month())
+					{
+						date_due = invoice.get("due_date");
+					}
+					else if(due_date_check.month() == date_due.month())
+					{
+						if(due_date_check.day() < date_due.day())
+						{
+							date_due = invoice.get("due_date");
+						}
+					}
+				}
+				date_month = due_date_check.getMonth();
+				if(date_month.toList("").size() == 1)
+				{
+					date_month = "0" + date_month.toString();
+				}
+				date_day = due_date_check.getDay();
+				if(date_day.toList("").size() == 1)
+				{
+					date_day = "0" + date_day.toString();
+				}
+				date_year = due_date_check.getYear();
+				if(date_year.toList("").size() == 1)
+				{
+					date_year = "0" + date_year.toString();
+				}
+				date_formatted = date_day + "/" + date_month + "/" + date_year;
+				balance = invoice.get("balance");
+				url = invoice.get("custom_field_hash").get("cf_sent_date").toString() + "    " + invoice.get("invoice_number").toString() + "    Due " + date_formatted + "    £" + balance.round(2);
+				info "url: " + url;
+				url_stack.add(url);
+				custom_field_slice = invoice.get("custom_fields");
+			}
+			day_delta = date_due.daysBetween(now);
+			info "Date delta is: " + day_delta + " days.";
+		}
+		info "pre-format URL stack: " + url_stack;
+		//Check URL Stack size & format email grammar & spacing appropriately
+		nu_url_stack = "";
+		stack_count = url_stack.size();
+		info "Stack count: " + stack_count;
+		for each  URL in url_stack
+		{
+			URL = URL.removeFirstOccurence(",");
+			if(stack_count > 1)
+			{
+				NuURL = URL + ",<br/>";
+			}
+			else
+			{
+				NuURL = URL + "<br/>";
+			}
+			nu_url_stack = nu_url_stack + NuURL;
+		}
+		// Check if mult of 15 days passed since due date - if so, send email to client
+		day_delta = date_due.daysBetween(now);
+		info "Date delta is: " + day_delta + " days.";
+		send = false;
+		if(contact.get("cf_disable_invoice_reminders") == false || contact.get("cf_disable_automatic_notificat") == null)
+		{
+			if(day_delta == 7)
+			{
+				body = body_lookup1.get("first") + "<br/><br/>" + nu_url_stack + body_lookup2.get("first");
+				sub_line = sub_line_lookup.get("first");
+				send = true;
+			}
+			else if(day_delta == 14)
+			{
+				body = body_lookup1.get("second") + "<br/><br/>" + nu_url_stack + body_lookup2.get("second");
+				sub_line = sub_line_lookup.get("second");
+				send = true;
+			}
+			else if(day_delta == 21)
+			{
+				body = body_lookup1.get("third") + "<br/><br/>" + nu_url_stack + body_lookup2.get("third");
+				sub_line = sub_line_lookup.get("third");
+				send = true;
+			}
+			else if(day_delta == 28)
+			{
+				body = body_lookup1.get("fourth") + "<br/><br/>" + nu_url_stack + body_lookup2.get("fourth");
+				sub_line = sub_line_lookup.get("fourth");
+				send = true;
+			}
+			url_stack.clear();
+			nu_url_stack.clear();
+			if(body != "" && body != null && send == true)
+			{
+				info "hit emailmap";
+				//Testing body
+				//body = "Test body";
+				//
+				email_list = List();
+				//email_list.add(contact.get("email"));
+				//
+				email_copy_list = List();
+				email_copy_list.add("internal.reporting@company.com");
+				//email_copy_list.add(" client internal email address ");
+				json = Map();
+				json.put("subject",sub_line);
+				json.put("body",body);
+				json.put("to_mail_ids",email_list);
+				// 			json.put("bcc_mail_ids",email_copy_list); //No longer possible to use this
+				params = Map();
+				json.put("start_date","2000-01-01");
+				json.put("end_date",today);
+				params.put("JSONString",json);
+				info "params=" + params;
+	 			sendst = invokeurl
+	 			[
+				url :"https://books.zoho.eu/api/v3/contacts/" + company + "/statements/email?organization_id=<OrgID>"
+				type :POST
+				parameters:params
+				connection:"booksinvoicereminder"
+	 			];
+	 			info "sendst: " + sendst;
+				//Send duplicate email for tracking
+				json.put("to_mail_ids",email_copy_list);
+				sendmail
+				[
+					from :zoho.adminuserid
+					to :email_copy_list
+					subject :sub_line + " to: " + contact.get("email")
+					message :body
+				]
+			}
+		}
+		//Diagnostic else clause
+		else
+		{
+			if(contact.get("cf_disable_invoice_reminders") == false)
+			{
+				info "Not to send today.";
+			}
+			else if(contact.get("cf_disable_invoice_reminders") == true)
+			{
+				info "Contact has automatic notifications disabled.";
+			}
+			else
+			{
+				info "Contact notification settings: " + contact.get("cf_disable_invoice_reminders");
+				info "Other failiure: " + contact;
+			}
+		}
+	}
+}
