@@ -1,0 +1,57 @@
+// constants
+WORKDRIVE_TEAM_ID = "<Workdrive main client folder id>";
+//
+ACCOUNTS_FOLDER_DI = "<Digital Imagery projects main folder id>";
+ACCOUNTS_FOLDER_INT = "<Interactive(video/animation) projects main folder id>";
+//
+workdrive_connection = "workdrive_connection_nu";
+subfolder_list = {"Delivery","Financials","Marketing","Production","Scope","Supplier Agreements"};
+// DEAL_TEMPLATE_SUBFOLDERS = {"1. Quoting / Design","2. Photographs","3. Site plans, notes, diagrams","4. Contracts","5. Install","6. Commissioning & handover documents"};
+// get deal data
+deal = zoho.crm.getRecordById("Deals",deal_id);
+deal_name = deal.get("Deal_Name");
+deal_type = deal.get("Project_Type");
+// get account data
+account_id = deal.get("Account_Name").get("id");
+account = zoho.crm.getRecordById("Accounts",account_id);
+//
+if(deal_type == "Digital Imagery")
+{
+	parent_folder_id = ACCOUNTS_FOLDER_DI;
+}
+else
+{
+	parent_folder_id = ACCOUNTS_FOLDER_INT;
+}
+// create deal folder and capture id
+response = zoho.workdrive.createFolder(deal_name,parent_folder_id,workdrive_connection);
+info "response: " + response;
+if(response.get("errors") == null)
+{
+	//create subfolders within newly created directory
+	for each  subfolder in subfolder_list
+	{
+		sub_folder_return = zoho.workdrive.createFolder(subfolder,response.get("data").get("id"),workdrive_connection);
+	}
+	//
+	deal_folder_id = response.get("data").get("id");
+	payload = {"Workdrive_Folder_ID":deal_folder_id,"Workdrive_Integration_Errors":null,"New_Workdrive_URL":response.get("data").get("attributes").get("permalink")};
+	update_crm = zoho.crm.updateRecord("Deals",deal_id,payload);
+}
+else
+{
+	// init blank error message and fetch response errors
+	error_message = "";
+	errors = response.get("errors").toJSONList();
+	//
+	// iterate errors list and compile human-readable string
+	for each  error in errors
+	{
+		code = "[" + error.get("id") + "] ";
+		message = error.get("title");
+		error_message = error_message + code + message + "\n\n";
+	}
+	//
+	// return string to error field
+	update_crm = zoho.crm.updateRecord("Deals",deal_id,{"Workdrive_Integration_Errors":error_message});
+}

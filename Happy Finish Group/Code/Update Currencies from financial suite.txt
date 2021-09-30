@@ -1,0 +1,39 @@
+//NZD (New zealand Dollar) 128743000000041721
+//USD US DOLLAR 128743000000000059
+//USD CRM DOLLAR 277563000000460027;
+resp = invokeurl
+[
+	url :"https://books.zoho.eu/api/v3/settings/currencies/" + 128743000000000059.toString() + "/exchangerates?organization_id=<Financial suite ID>"
+	type :GET
+	connection:"books_connection"
+];
+currency_code = resp.getJSON("exchange_rates").getJSON("currency_code");
+exchange_rate = 1 / resp.getJSON("exchange_rates").getJSON("rate");
+//TODO
+update_currency = invokeurl
+[
+	url :"https://www.zohoapis.eu/crm/v2/org/currencies/" + 277563000000460027.toString()
+	type :PUT
+	parameters:{"exchange_rate":exchange_rate}
+	connection:"crm_currencies"
+];
+info update_currency;
+//euro books id 128743000000000071
+//euro crm id 277563000000460033;
+resp = invokeurl
+[
+	url :"https://books.zoho.eu/api/v3/settings/currencies/" + 128743000000000071.toString() + "/exchangerates?organization_id=<Financial suite ID>"
+	type :GET
+	connection:"books_connection"
+];
+info resp.getJSON("exchange_rates").getJSON("currency_code");
+info 1 / resp.getJSON("exchange_rates").getJSON("rate");
+update_currency_euro = invokeurl
+[
+	url :"https://www.zohoapis.eu/crm/v2/org/currencies/" + 277563000000460033.toString()
+	type :PUT
+	parameters:{"exchange_rate":exchange_rate}
+	connection:"crm_currencies"
+];
+info update_currency_euro;
+return "";

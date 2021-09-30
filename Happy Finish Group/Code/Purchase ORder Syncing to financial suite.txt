@@ -1,0 +1,303 @@
+PO_JSON = zoho.crm.getRecordById("Purchase_Orders",PO_ID);
+info "PO JSON: " + PO_JSON;
+//fetch project id from opp
+opp_JSON = zoho.crm.getRecordById("Potentials",PO_JSON.get("Associated_Opportunity").getJSON("id"));
+info "CRM Opportunity poll return: " + opp_JSON;
+zprojects_ID = opp_JSON.get("Zoho_Project_Id");
+//fetch company record
+account_JSON = zoho.crm.getRecordById("Accounts",opp_JSON.get("Account_Name").getJSON("id"));
+info "CRM account JSON: " + account_JSON;
+//CONSTANTS
+books_ORGIDs = {"London":"<UK Finance suite ID>","Portland":"<US Finance suite ID>","Milan":"<ITA Finance suite ID>"};
+books_CFIDs = {"London":"128743000000286447","Portland":"128177000000278013","Milan":"139880000000130009"};
+CRM_creator_fields = {"London":"128743000001101001","Portland":"128177000000278007","Milan":"139880000000130005"};
+studio_lookup = {"UK":"London","US":"Portland","ITA":"Milan"};
+studio_raw = PO_JSON.get("Studio");
+if(studio_raw.containsIgnoreCase("London"))
+{
+	studio = "London";
+	prefix = "UK";
+}
+else if(studio_raw.containsIgnoreCase("Portland"))
+{
+	studio = "Portland";
+	prefix = "US";
+}
+else if(studio_raw.containsIgnoreCase("Milan") || studio_raw.containsIgnoreCase("Verona"))
+{
+	studio = "Milan";
+	prefix = "ITA";
+}
+BOrg_ID = books_ORGIDs.get(studio);
+custom_field = books_CFIDs.get(studio);
+CRM_creator = CRM_creator_fields.get(studio);
+info "Studio Picked: " + studio;
+//
+today = now.toDate();
+today_number = 0 - today.getDay();
+due_date_offset = {"Net 60":60,"Net 45":45,"Net 30":30,"Net 15":15,"Intercompany":120,"Due on Receipt":0};
+end_month = today.eomonth(0);
+end_month_offset = end_month.getDay() - today_number;
+due_date_offset.put("Due end of the month",end_month_offset);
+end_next_month = today.eomonth(1);
+end_next_month_offset = end_month_offset + end_next_month.getDay();
+due_date_offset.put("Due end of next month",end_next_month_offset);
+//Calculate due date
+due_type = PO_JSON.get("Payment_Terms");
+due_date = today.addDay(due_date_offset.get(due_type));
+//
+package = List();
+ass_opp = Map();
+ass_opp.put("customfield_id",custom_field);
+//if UK region, can use the lookup field. Else will populate the name to a single line.
+info "Setup projects relationship";
+if(studio == "London")
+{
+	opp_name = PO_JSON.get("Associated_Opportunity").get("name");
+	books_project = zoho.books.getRecords("projects",BOrg_ID,{"project_name_startswith":opp_JSON.get("Deal_Name").getPrefix(" - ")});
+	info "books project return " + books_project;
+	if(books_project.toString().containsIgnoreCase("java.lang") == true)
+	{
+		info "hit java if";
+		project_cf_value = "";
+	}
+	else
+	{
+		info "passed java if";
+		project_name = opp_JSON.get("Deal_Name");
+		// 		info "books project " + books_project;
+		if(books_project.toString().containsIgnoreCase("\"projects\":[],") == false)
+		{
+			books_project_ID = books_project.get("projects").get(0).getJSON("project_id");
+			info "books project id: " + books_project_ID;
+			ass_opp.put("value",books_project_ID.toLong());
+		}
+		else
+		{
+			info "No project for associated opportunity";
+			no_project = 1;
+		}
+	}
+}
+else
+{
+	ass_opp.put("value",PO_JSON.get("Associated_Opportunity").get("name"));
+}
+info "Project relationship set";
+if(no_project != 1)
+{
+	package.add(ass_opp);
+}
+CRM_creator_map = Map();
+CRM_creator_map.put("customfield_id",CRM_creator);
+CRM_creator_map.put("value",PO_JSON.get("Created_By").get("name"));
+package.add(CRM_creator_map);
+//
+itemsbox = List();
+// info "po JSON:" + PO_JSON;
+for each  product in PO_JSON.get("Product_Details")
+{
+	info "Product name: " + product.get("product").getJSON("name");
+	info "Product CRM Map: " + product;
+	item_name = Map();
+	item_name_raw = product.get("product").getJSON("name");
+	item_name_prefix = item_name_raw.getPrefix(" ");
+	item_name_encoded = zoho.encryption.urlEncode(item_name_prefix);
+	info "Encoded Product name: " + item_name_encoded;
+	item_name.put("name_contains",item_name_encoded);
+	// 	item_name = "name="+product.get("product").get("name");
+	item_books = zoho.books.getRecords("Items",BOrg_ID,item_name);
+	info "books item = " + item_books;
+	item = Map();
+	if(item_books.toString().contains("\"items\":[],") == true || item_books.get("items") == null)
+	{
+		//item not in books, reject creation further down
+		found = 0;
+	}
+	else
+	{
+		found = 0;
+		for each  books_item in item_books.get("items")
+		{
+			if(books_item.get("name").remove(" ") == product.get("product").getJSON("name").remove(" ") && found == 0)
+			{
+				item.put("item_id",books_item.getJSON("item_id"));
+				found = 1;
+			}
+		}
+	}
+	if(found = 1)
+	{
+		item.put("name",item_name_raw);
+		item.put("quantity",product.getJSON("quantity"));
+		item.put("rate",product.getJSON("list_price"));
+		item.put("item_total",product.getJSON("total"));
+		item.put("description",ifnull(product.get("product_description"),""));
+		itemsbox.add(item);
+		info "Found item";
+	}
+	else
+	{
+		info "item not found";
+	}
+}
+info "itemsbox: " + itemsbox;
+// get vendor
+vendor_id = PO_JSON.get("Vendor_Name").getJSON("id");
+vendor_JSON = zoho.crm.getRecordById("Vendors",vendor_id);
+info "Vendor JSON: " + vendor_JSON;
+vendor_name = vendor_JSON.get("Vendor_Name");
+vendor_email = vendor_JSON.get("Email");
+if(vendor_email == "" || vendor_email == null)
+{
+	vendor_email = "null string";
+}
+info "vendor email check: " + vendor_email;
+vendor_phone = vendor_JSON.getJSON("Phone");
+if(vendor_phone.toString() == "null" || vendor_phone == null)
+{
+	vendor_phone = 11111111;
+}
+info "vendor phone check: " + vendor_phone;
+info "vendor name check: " + vendor_name;
+if(vendor_phone != 11111111 || vendor_email != "null string")
+{
+	url = "https://books.zoho.eu/api/v3/contacts?contact_name_contains=" + encodeUrl(vendor_name) + "&organization_id=" + BOrg_ID;
+	vendor_search = invokeurl
+	[
+		url :url
+		type :GET
+		connection:"books"
+	];
+	info "vendor_search " + vendor_search;
+	// get json for vendor
+	if(vendor_search.toString().containsIgnoreCase("\"contacts\":[],") == false)
+	{
+		for each  books_vendor in vendor_search.get("contacts")
+		{
+			if(books_vendor.get("contact_type") == "vendor")
+			{
+				info "Hit vendor";
+				if(books_vendor.get("email").contains(vendor_email) == true || books_vendor.get("phone") == vendor_phone)
+				{
+					books_vendor_id = books_vendor.get("contact_id");
+					failed_vendor = false;
+				}
+				else
+				{
+					info "failed email & phone check";
+					failed_vendor = true;
+				}
+			}
+		}
+	}
+	else
+	{
+		info "no vendor of name on Books instance";
+		books_vendor_id = "";
+	}
+	if(books_vendor_id == null || books_vendor_id == "")
+	{
+		//no books vendor found, so create one.
+		vendor_payload = Map();
+		vendor_payload.put("contact_name",vendor_JSON.get("Vendor_Name"));
+		vendor_payload.put("contact_type","vendor");
+		info "basics done";
+		//new currency handling
+		quote_currency = PO_JSON.get("Currency");
+		currency_list = invokeurl
+		[
+			url :"https://books.zoho.eu/api/v3/settings/currencies?organization_id=" + BOrg_ID
+			type :GET
+			connection:"books_connection"
+		];
+		currency_found = 0;
+		for each  currency in currency_list.get("currencies")
+		{
+			if(currency_found == 0 && currency.get("currency_code") == quote_currency)
+			{
+				books_currency = currency.get("currency_id");
+				currency_found = 1;
+			}
+		}
+		vendor_payload.put("currency_id",books_currency.toLong());
+		info "Currency ID found: " + books_currency;
+		//set up email and phone
+		contact_list = List();
+		primary_contact = Map();
+		name_list = vendor_JSON.get("Primary_Contact").toList(" ");
+		if(name_list.size() > 1)
+		{
+			primary_contact.put("last_name",name_list.get(1));
+			primary_contact.put("first_name",name_list.get(0));
+		}
+		else
+		{
+			if(primary_contact.get(0).contains("@") == false)
+			{
+				primary_contact.put("last_name",name_list.get(0));
+			}
+		}
+		primary_contact.put("email",vendor_JSON.get("Email"));
+		primary_contact.put("phone",vendor_JSON.get("Phone"));
+		contact_list.add(primary_contact);
+		vendor_payload.put("contact_persons",contact_list);
+		//set up billing address for customer
+		billing_address = Map();
+		billing_address.put("address",vendor_JSON.get("Street"));
+		billing_address.put("city",vendor_JSON.get("City"));
+		billing_address.put("state",vendor_JSON.get("State"));
+		billing_address.put("zip",vendor_JSON.get("Zip_Code"));
+		billing_address.put("country",vendor_JSON.get("Country1"));
+		billing_address.put("attention",vendor_JSON.get("Vendor_Name"));
+		vendor_payload.put("billing_address",billing_address);
+		info "billing address done";
+		//
+		books_vendor_launch = zoho.books.createRecord("contacts",BOrg_ID,vendor_payload);
+		info "Books vendor creation return: " + books_vendor_launch;
+		if(books_vendor_launch.containKey("message") == true && books_vendor_launch.get("message").containsIgnoreCase("The contact has been added.") == true)
+		{
+			failed_vendor = false;
+			books_vendor_id = books_vendor_launch.get("contact").getJSON("contact_id");
+		}
+	}
+	info "vendor ID:" + books_vendor_id;
+	//
+	payload = Map();
+	payload.put("Due_Date",due_date);
+	payload.put("Payment_Terms",due_type);
+	payload.put("vendor_id",books_vendor_id);
+	payload.put("terms",PO_JSON.get("Terms_and_Conditions"));
+	payload.put("notes",PO_JSON.get("Description"));
+	payload.put("custom_fields",package);
+	payload.put("line_items",itemsbox);
+	//construct PO number
+	PO_number_raw = PO_JSON.get("Purchase_Order_Number").getSuffix("PO-");
+	PO_number_new = "PO-" + prefix + PO_number_raw;
+	payload.put("purchaseorder_number",PO_number_new);
+	info "payload is: " + payload;
+	info "basic payload";
+	launch = zoho.books.createRecord("Purchaseorders",BOrg_ID,payload);
+	info "launch return: " + launch;
+	if(launch.toString().contains("Purchase Order has been added."))
+	{
+		crm_update = zoho.crm.updateRecord("Purchase_Orders",PO_ID,{"Books_Creation_Return":launch.get("message"),"Books_Record":launch.get("purchaseorder").get("id")});
+	}
+	else if(payload.get("line_items").toString() == "[]" || launch.toString().contains("Purchase order cannot be created for a non-purchase item"))
+	{
+		crm_update = zoho.crm.updateRecord("Purchase_Orders",PO_ID,{"Books_Creation_Return":"Invoice cannot be created, the item(s) listed do not exist in target Books instance"});
+	}
+	else if(failed_vendor == true)
+	{
+		crm_update = zoho.crm.updateRecord("Purchase_Orders",PO_ID,{"Books_Creation_Return":"Invoice cannot be created, the Vendor cannot be matched. Check the Email & Phone Number between the CRM Vendor & Books Vendor."});
+	}
+	else
+	{
+		crm_update = zoho.crm.updateRecord("Purchase_Orders",PO_ID,{"Books_Creation_Return":launch.get("message")});
+	}
+}
+else
+{
+	crm_update = zoho.crm.updateRecord("Purchase_Orders",PO_ID,{"Books_Creation_Return":"Vendor does not have email or phone associated with it. Purchase Order creation cannot proceed."});
+}
+info "CRM update: " + crm_update;

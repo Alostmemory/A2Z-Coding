@@ -1,0 +1,465 @@
+books_ORGIDs = {"London":"<UK Finance suite ID>","Portland":"<US Finance suite ID>","Milan":"<ITA Finance suite ID>"};
+studio_lookup = {"UK":"London","US":"Portland","Italy":"Milan"};
+//to stay until project population complete
+//LEGACY - Project name fields, replaced with Lookup version below
+// project_cf_lookup = {"London":"128743000000238317","Portland":"128177000000291004","Milan":"139880000000130001"};
+//once complete, replace with below;
+project_cf_lookup = {"London":"128743000000238317","Portland":"128177000000870493","Milan":"139880000000684261"};
+//
+project_desc_cf_lookup = {"London":"128743000000123010","Portland":"128177000000085067","Milan":"139880000000130015"};
+producer_cf_lookup = {"London":"128743000000123027","Portland":"128177000000085071","Milan":"139880000000130019"};
+invoice_schedule_cf_lookup = {"London":"128743000000123051","Portland":"128177000000085093","Milan":"139880000000130043"};
+payment_terms_cf_lookup = {"London":"128743000000123059","Portland":"128177000000085111","Milan":"139880000000130061"};
+account_payment_terms_cf = {"London":"128743000000261261","Portland":"128177000000085023","Milan":"139880000000283001"};
+change_request_cf_lookup = {"London":"128743000000265013","Portland":"128177000000085129","Milan":"139880000000130073"};
+sync_status = "";
+no_project = 0;
+customer_BID = 1111;
+//
+quote_JSON = zoho.crm.getRecordById("Quotes",quote_ID);
+info "Quote JSON: " + quote_JSON;
+related_opp_JSON = zoho.crm.getRecordById("Potentials",quote_JSON.get("Deal_Name").get("id"));
+info "Related opp JSON: " + related_opp_JSON;
+//handling for the optional billing account field
+if(ifnull(quote_JSON.get("Billing_Company"),"") != "")
+{
+	related_account = zoho.crm.getRecordById("Accounts",quote_JSON.get("Billing_Company").get("id"));
+}
+else
+{
+	related_account = zoho.crm.getRecordById("Accounts",quote_JSON.get("Account_Name").get("id"));
+}
+info "Related Account JSON: " + related_account;
+//pick correct books instance, and load the correct IDs
+region = ifnull(related_opp_JSON.get("Account_Region"),"");
+if(region == "UK")
+{
+	region_check = "London";
+}
+else if(region == "US")
+{
+	region_check = "Portland";
+}
+else if(region == "ITA")
+{
+	region_check = "Milan";
+}
+else if(region == "")
+{
+	region_check = related_opp_JSON.get("Studio");
+}
+if(region_check.containsIgnoreCase("London") == true)
+{
+	//check if a linked Books Contact is on record
+	if(ifnull(related_account.get("Books_UK_ID"),"") != "")
+	{
+		customer_BID = related_account.get("Books_UK_ID").toLong();
+	}
+	//
+	BOrgID = books_ORGIDs.get("London");
+	project_cf = project_cf_lookup.get("London");
+	project_desc_cf = project_desc_cf_lookup.get("London");
+	producer_cf = producer_cf_lookup.get("London");
+	invoice_schedule_cf = invoice_schedule_cf_lookup.get("London");
+	payment_terms_cf = payment_terms_cf_lookup.get("London");
+	account_payment_terms = account_payment_terms_cf.get("London");
+	change_request_cf = change_request_cf_lookup.get("London");
+	info "Look for  project in books";
+	//find project in books
+	project_name = quote_JSON.get("Deal_Name").get("name").getPrefix(" - ");
+	search_clause = {"project_name_startswith":project_name};
+	project_search = zoho.books.getRecords("Projects",BOrgID,search_clause,"books");
+	info "Books UK Project search: " + project_search;
+	if(project_search.toString().containsIgnoreCase("java.lang") == true)
+	{
+		project_cf_value = "";
+		sync_status = sync_status + " Books UK Internal error on project search, leaving field blank.";
+	}
+	else
+	{
+		if(project_search.toString().containsIgnoreCase("\"projects\":[],") == false)
+		{
+			project_cf_value = project_search.get("projects").get(0).getJSON("project_id");
+			info "books project id: " + project_cf_value;
+		}
+		else
+		{
+			info "No project for associated opportunity";
+			sync_status = sync_status + " No project found in Books instance, leaving field blank.";
+			project_cf_value = "";
+			no_project = 1;
+		}
+	}
+}
+else if(region_check.containsIgnoreCase("Portland") == true)
+{
+	//check if a linked Books Contact is on record
+	if(ifnull(related_account.get("Books_US_ID"),"") != "")
+	{
+		customer_BID = related_account.get("Books_US_ID").toLong();
+	}
+	//
+	BOrgID = books_ORGIDs.get("Portland");
+	project_cf = project_cf_lookup.get("Portland");
+	project_desc_cf = project_desc_cf_lookup.get("Portland");
+	producer_cf = producer_cf_lookup.get("Portland");
+	invoice_schedule_cf = invoice_schedule_cf_lookup.get("Portland");
+	payment_terms_cf = payment_terms_cf_lookup.get("Portland");
+	account_payment_terms = account_payment_terms_cf.get("Portland");
+	change_request_cf = change_request_cf_lookup.get("Portland");
+	info "Look for  project in books";
+	//find project in books
+	project_name = quote_JSON.get("Deal_Name").get("name").getPrefix(" - ");
+	search_clause = {"project_name_startswith":project_name};
+	project_search = zoho.books.getRecords("Projects",BOrgID,search_clause,"books");
+	info "Books US Project search: " + project_search;
+	if(project_search.toString().containsIgnoreCase("java.lang") == true)
+	{
+		project_cf_value = "";
+		sync_status = sync_status + " Books US Internal error on project search, leaving field blank.";
+	}
+	else
+	{
+		if(project_search.toString().containsIgnoreCase("\"projects\":[],") == false)
+		{
+			project_cf_value = project_search.get("projects").get(0).getJSON("project_id");
+			info "books project id: " + project_cf_value;
+		}
+		else
+		{
+			info "No project for associated opportunity";
+			sync_status = sync_status + " No project found in Books instance, leaving field blank.";
+			project_cf_value = "";
+			no_project = 1;
+		}
+	}
+}
+else if(region_check.containsIgnoreCase("Milan") == true)
+{
+	//check if a linked Books Contact is on record
+	if(ifnull(related_account.get("Books_ITA_ID"),"") != "")
+	{
+		customer_BID = related_account.get("Books_ITA_ID").toLong();
+	}
+	//
+	BOrgID = books_ORGIDs.get("Milan");
+	project_cf = project_cf_lookup.get("Milan");
+	project_desc_cf = project_desc_cf_lookup.get("Milan");
+	producer_cf = producer_cf_lookup.get("Milan");
+	invoice_schedule_cf = invoice_schedule_cf_lookup.get("Milan");
+	payment_terms_cf = payment_terms_cf_lookup.get("Milan");
+	account_payment_terms = account_payment_terms_cf.get("Milan");
+	change_request_cf = change_request_cf_lookup.get("Milan");
+	info "Look for  project in books";
+	//find project in books
+	project_name = quote_JSON.get("Deal_Name").get("name").getPrefix(" - ");
+	search_clause = {"project_name_startswith":project_name};
+	project_search = zoho.books.getRecords("Projects",BOrgID,search_clause,"books");
+	info "Books UK Project search: " + project_search;
+	if(project_search.toString().containsIgnoreCase("java.lang") == true)
+	{
+		project_cf_value = "";
+		sync_status = sync_status + " Books ITA Internal error on project search, leaving field blank.";
+	}
+	else
+	{
+		if(project_search.toString().containsIgnoreCase("\"projects\":[],") == false)
+		{
+			project_cf_value = project_search.get("projects").get(0).getJSON("project_id");
+			info "books project id: " + project_cf_value;
+		}
+		else
+		{
+			info "No project for associated opportunity";
+			sync_status = sync_status + " No project found in Books instance, leaving field blank.";
+			project_cf_value = "";
+			no_project = 1;
+		}
+	}
+}
+else
+{
+	BOrgID = "Instance not found";
+	sync_status = sync_status + "Estimate creation failed. Books instance not found";
+}
+if(BOrgID != "Instance not found")
+{
+	if(related_account.get("Sync_to_Books") == true)
+	{
+		//if record ID link not on CRM company record, begin search/creation
+		if(customer_BID == 1111)
+		{
+			payload = Map();
+			// search for customer if Books ID not on CRM Account
+			CRM_customer = zoho.crm.getRecordById("Accounts",quote_JSON.get("Account_Name").get("id"));
+			CRM_customer_BooksID = ifNull(CRM_customer.get("Books_Contact_ID"),"");
+			customer_name = quote_JSON.get("Account_Name").get("name");
+			info "CRM account: " + CRM_customer;
+			customer_name_encode = zoho.encryption.urlEncode(customer_name);
+			info "Customer name encoded: " + customer_name_encode;
+			customer_search = zoho.books.getRecords("contacts",BOrgID,"contact_name=" + customer_name_encode,"books");
+			//
+			info "Books customer search: " + customer_search;
+			found = false;
+			if(customer_search.get("contacts").toString() != "{}")
+			{
+				for each  customer_entry in customer_search.get("contacts")
+				{
+					customer_fetch = zoho.books.getRecordsByID("contacts",BOrgID,customer_entry.get("contact_id"),"books");
+					info "customer fetch: " + customer_fetch;
+					customer = customer_fetch.get("contact");
+					if(customer.containKey("billing_address") == true)
+					{
+						customer_postal = ifnull(customer.get("billing_address").get("zip"),"null_entry");
+					}
+					else
+					{
+						customer_postal = "null_entry_no_address_section";
+					}
+					info "customer postal: " + customer_postal;
+					if((ifnull(customer.get("email"),"").containsIgnoreCase(ifnull(CRM_customer.get("Company_Email"),"null")) || ifnull(customer.get("phone"),"").containsIgnoreCase(ifnull(CRM_customer.get("Phone").toString(),"null")) || ifnull(customer_postal,"").containsIgnoreCase(ifnull(CRM_customer.get("Billing_Code"),"null")) == true || ifnull(customer_postal,"").containsIgnoreCase(ifnull(quote_JSON.get("Billing_Code"),"null"))) && found == false)
+					{
+						if(customer.get("currency_code") == quote_JSON.get("Currency"))
+						{
+							customer_BID = customer.get("contact_id");
+							found = true;
+							info "customer record found";
+						}
+					}
+					info "finished customer search";
+				}
+			}
+			if(customer_BID == 1111)
+			{
+				//customer not found, so create one from the CRM record
+				//fetch contact from CRM
+				CRM_contact = zoho.crm.getRecordById("Contacts",quote_JSON.get("Contact_Name").get("id"));
+				info "CRM contact: " + CRM_contact;
+				//
+				nu_customer = Map();
+				nu_customer.put("contact_name",CRM_customer.get("Account_Name"));
+				nu_customer.put("contact_type","customer");
+				nu_customer.put("contact_sub_type","business");
+				info "basics done";
+				//new currency handling
+				quote_currency = quote_JSON.get("Currency");
+				currency_list = invokeurl
+				[
+					url :"https://books.zoho.eu/api/v3/settings/currencies?organization_id=" + BOrgID
+					type :GET
+					connection:"books_connection"
+				];
+				currency_found = 0;
+				for each  currency in currency_list.get("currencies")
+				{
+					if(currency_found == 0 && currency.get("currency_code") == quote_currency)
+					{
+						books_currency = currency.get("currency_id");
+						currency_found = 1;
+					}
+				}
+				nu_customer.put("currency_id",books_currency.toLong());
+				info "Currency ID found: " + books_currency;
+				//set up custom fields for customer
+				account_custom_fields = List();
+				if(ifnull(CRM_customer.get("Payment_Terms"),"") != "")
+				{
+					//denature CRM payment terms
+					terms_raw = CRM_customer.get("Payment_Terms");
+					terms_raw = terms_raw.toList(" ");
+					iterator = 0;
+					terms_cleaned = "";
+					for each  section in terms_raw
+					{
+						if(iterator = 0)
+						{
+							terms_cleaned = terms_cleaned + section;
+							iterator = 1;
+						}
+						else
+						{
+							terms_cleaned = terms_cleaned + " " + section.toLowerCase();
+						}
+					}
+					info "cleaned terms of payment: " + terms_cleaned;
+					account_custom_fields.add({"id":account_payment_terms,"value":terms_cleaned});
+				}
+				nu_customer.put("custom_fields",account_custom_fields);
+				info "custom fields done";
+				//set up contact for customer
+				contact_list = List();
+				primary_contact = Map();
+				primary_contact.put("first_name",CRM_contact.get("First_Name"));
+				primary_contact.put("last_name",CRM_contact.get("Last_Name"));
+				primary_contact.put("email",CRM_contact.get("Email"));
+				primary_contact.put("phone",CRM_contact.get("Phone"));
+				primary_contact.put("is_primary_contact",true);
+				contact_list.add(primary_contact);
+				nu_customer.put("contact_persons",contact_list);
+				info "primary contact done";
+				//set up billing address for customer
+				billing_address = Map();
+				if(quote_JSON.get("Billing_Street") == null || quote_JSON.get("Billing_Code") == null)
+				{
+					//no address info in quote record, so pull from account
+					billing_address.put("address",CRM_customer.get("Billing_Street"));
+					billing_address.put("city",CRM_customer.get("Billing_City"));
+					billing_address.put("state",CRM_customer.get("Billing_State"));
+					billing_address.put("zip",CRM_customer.get("Billing_Code"));
+					billing_address.put("country",CRM_customer.get("Country_1"));
+					billing_address.put("attention",CRM_customer.get("Account_Name"));
+				}
+				else
+				{
+					//pull address info from quote in preference
+					billing_address.put("address",quote_JSON.get("Billing_Street"));
+					billing_address.put("city",quote_JSON.get("Billing_City"));
+					billing_address.put("state",quote_JSON.get("Billing_State"));
+					billing_address.put("zip",quote_JSON.get("Billing_Code"));
+					billing_address.put("country",quote_JSON.get("Country_1"));
+					billing_address.put("attention",quote_JSON.get("Account_Name").get("name"));
+				}
+				nu_customer.put("billing_address",billing_address);
+				info "billing address done";
+				//
+				books_company_launch = zoho.books.createRecord("contacts",BOrgID,nu_customer);
+				info "Books company creation return: " + books_company_launch;
+				if(books_company_launch.containKey("message") == true && books_company_launch.get("message").containsIgnoreCase("The contact has been added.") == true)
+				{
+					customer_BID = books_company_launch.get("contact").getJSON("contact_id");
+					sync_status = sync_status + " Company created.";
+					if(region_check == "London")
+					{
+						crm_account_update = zoho.crm.updateRecord("Accounts",quote_JSON.get("Account_Name").get("id"),{"Books_UK_ID":customer_BID.toString()});
+					}
+					else if(region_check == "Portland")
+					{
+						crm_account_update = zoho.crm.updateRecord("Accounts",quote_JSON.get("Account_Name").get("id"),{"Books_US_ID":customer_BID.toString()});
+					}
+					else if(region_check == "Milan")
+					{
+						crm_account_update = zoho.crm.updateRecord("Accounts",quote_JSON.get("Account_Name").get("id"),{"Books_ITA_ID":customer_BID.toString()});
+					}
+					else
+					{
+						crm_account_update = "NULL - REGION NOT VALID. HOW DID IT GET THIS FAR?";
+					}
+					info "CRM Account updating return: " + crm_account_update;
+				}
+			}
+		}
+		//This second IF loop must run sequentially after the first one!
+		if(customer_BID == 1111 || customer_BID == null)
+		{
+			//customer not found & creation failed. return a failiure report to CRM
+			info "Estimate creation failed. Error finding/creating contact in books";
+			sync_status = sync_status + " Estimate creation failed. Error finding/creating contact in books";
+		}
+		else
+		{
+			//construct books-friendly date
+			today = now.getYear().toString() + "-" + now.getMonth().toString() + "-" + now.getDay().toString();
+			info "today: " + today;
+			//construct Estimate number from CRM auto gen
+			CRM_number = quote_JSON.get("Quote_Ref");
+			books_number = "EST-" + CRM_number;
+			//customer found, create estimate from quote
+			estimate_payload = Map();
+			estimate_payload.put("customer_id",customer_BID);
+			estimate_payload.put("estimate_number",books_number);
+			estimate_payload.put("discount",quote_JSON.get("Discount"));
+			estimate_payload.put("adjustment",quote_JSON.get("Adjustment"));
+			estimate_payload.put("salesperson_name",quote_JSON.get("Owner").get("name"));
+			estimate_payload.put("notes",quote_JSON.get("Notes"));
+			//set up list of sub-maps for custom fields
+			customfields = List();
+			if(related_opp_JSON.get("Studio").containsIgnoreCase("London") == true)
+			{
+				if(no_project != 1 && project_cf_value != "")
+				{
+					customfields.add({"customfield_id":project_cf,"value":project_cf_value});
+				}
+			}
+			else
+			{
+				customfields.add({"customfield_id":project_cf,"value":project_cf_value});
+			}
+			description_check = ifnull(quote_JSON.get("Description"),"");
+			if(description_check != "")
+			{
+				customfields.add({"customfield_id":project_desc_cf,"value":quote_JSON.get("Description")});
+			}
+			customfields.add({"customfield_id":producer_cf,"value":quote_JSON.get("Producer")});
+			customfields.add({"customfield_id":invoice_schedule_cf,"value":quote_JSON.get("Invoicing_Schedule")});
+			//denature CRM payment terms
+			terms_raw = quote_JSON.get("Payment_Terms");
+			terms_raw = terms_raw.toList(" ");
+			iterator = 0;
+			terms_cleaned = "";
+			for each  section in terms_raw
+			{
+				if(iterator = 0)
+				{
+					terms_cleaned = terms_cleaned + section;
+					iterator = 1;
+				}
+				else
+				{
+					terms_cleaned = terms_cleaned + " " + section.toLowerCase();
+				}
+			}
+			info "cleaned terms of payment: " + terms_cleaned;
+			customfields.add({"id":payment_terms_cf,"value":terms_cleaned});
+			customfields.add({"customfield_id":change_request_cf,"value":quote_JSON.get("Change_Request")});
+			estimate_payload.put("custom_fields",customfields);
+			//set up items for estimate
+			items_box = List();
+			for each  product in quote_JSON.get("Product_Details")
+			{
+				info "Product name: " + product.get("product").getJSON("name");
+				item_name = Map();
+				item_name.put("name",product.get("product").get("name"));
+				item_books = zoho.books.getRecords("Items",BOrgID,item_name);
+				info "books item = " + item_books.get("items");
+				item = Map();
+				if(item_books.get("items").toString() != "{}" && item_books.get("items").toString() != "[]" && item_books.get("items").toString() != "")
+				{
+					//if the item exists in the books instance, link via ID, if not, enter as new product
+					item.put("item_id",item_books.get("items").get(0).getJSON("item_id"));
+				}
+				item.put("name",item_name.get("name"));
+				item.put("quantity",product.getJSON("quantity"));
+				item.put("rate",product.getJSON("list_price"));
+				item.put("item_total",product.getJSON("total"));
+				item.put("description",ifnull(product.get("product_description"),""));
+				items_box.add(item);
+			}
+			estimate_payload.put("line_items",items_box);
+			//commit the estimate to the customer
+			info "Estimate Payload: " + estimate_payload;
+			estimate_launch = zoho.books.createRecord("estimates",BOrgID,estimate_payload,"books");
+			info "Estimate creation return: " + estimate_launch;
+			if(estimate_launch.containKey("message") == true && estimate_launch.get("message") == "The estimate has been created.")
+			{
+				//creation successful
+				sync_status = sync_status + " Estimate created successfully.";
+			}
+			else if(estimate_launch.containKey("message") == false)
+			{
+				//books internal error
+				sync_status = sync_status + " Estimate creation failed. Books internal error.";
+			}
+			else
+			{
+				//failed creation
+				sync_status = sync_status + " " + estimate_launch.get("message");
+			}
+		}
+	}
+	else
+	{
+		sync_status = sync_status + " Company record not approved.";
+	}
+}
+crm_update = zoho.crm.updateRecord("Quotes",quote_ID,{"Books_Creation_Return":sync_status});
+info "CRM update return: " + crm_update;

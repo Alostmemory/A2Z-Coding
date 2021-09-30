@@ -1,0 +1,90 @@
+contact_JSON = zoho.crm.getRecordById("Contacts",contact_ID.toNumber());
+// info contact_JSON;
+payload = Map();
+payload.put("Primary_Contact",contact_JSON.get("Full_Name"));
+payload.put("Email",contact_JSON.get("Email"));
+payload.put("Phone",contact_JSON.get("Phone"));
+payload.put("Street",contact_JSON.get("Mailing_Street"));
+payload.put("City",contact_JSON.get("Mailing_City"));
+payload.put("State",contact_JSON.get("Mailing_State"));
+payload.put("Zip_Code",contact_JSON.get("Mailing_Zip"));
+payload.put("Country1",contact_JSON.get("Mailing_Country1"));
+payload.put("Currency",contact_JSON.get("Currency"));
+payload.put("Exchange_Rate",contact_JSON.get("Exchange_Rate"));
+payload.put("Owner",contact_JSON.get("Owner").get("id"));
+payload.put("Contractor",contact_JSON.get("Contractor"));
+payload.put("CRM_Converted_Contact",true);
+info "initial payload: " + payload;
+if(contact_JSON.get("Converted") == false)
+{
+	//
+	if(contact_JSON.get("Account_Name") != null)
+	{
+		info "account associated";
+		payload.put("Vendor_Name",contact_JSON.get("Account_Name").get("name"));
+	}
+	else
+	{
+		info "no account associated, making one";
+		fail_creation = false;
+		Account_payload = Map();
+		Account_payload.put("Account_Name",contact_JSON.get("Full_Name"));
+		Account_payload.put("Company_Email",contact_JSON.get("Email"));
+		Account_payload.put("Phone",contact_JSON.get("Phone"));
+		if(contact_JSON.get("Vendor_Region") != null)
+		{
+			Account_payload.put("Company_Region",contact_JSON.get("Vendor_Region"));
+		}
+		else
+		{
+			Account_payload.put("Company_Region","UK");
+		}
+		Account_payload.put("Billing_Street",contact_JSON.get("Mailing_Street"));
+		Account_payload.put("Billing_City",contact_JSON.get("Mailing_City"));
+		Account_payload.put("Billing_State",contact_JSON.get("Mailing_State"));
+		Account_payload.put("Billing_Code",contact_JSON.get("Mailing_Zip"));
+		Account_payload.put("Billing_Country",contact_JSON.get("Mailing_Country1"));
+		Account_payload.put("Currency",contact_JSON.get("Currency"));
+		account_launch = zoho.crm.createRecord("Accounts",Account_payload);
+		info "Account creation commit: " + account_launch;
+		Vendor_update = Map();
+		if(account_launch.containKey("code") == true)
+		{
+			Vendor_update.put("Account_Creation_Responce",Vendor_update.toString());
+			fail_creation = true;
+		}
+		else
+		{
+			Vendor_update.put("Company_Creation_Responce",account_launch.get("id"));
+			Vendor_update.put("Account_Name",account_launch.get("id"));
+			payload.put("Vendor_Name",contact_JSON.get("Full_Name"));
+		}
+		Vendor_launch = zoho.crm.updateRecord("Contacts",contact_ID,Vendor_update);
+		info "Contact Company creation commit: " + Vendor_launch;
+	}
+	//
+	if(fail_creation == true && contact_JSON.get("Account_Name") == null)
+	{
+		payload = Map();
+		payload.put("Conversion_Responce","Failed due to Account creation failiure");
+	}
+	else
+	{
+		launch = zoho.crm.createRecord("Vendors",payload);
+		info "Vendor commit: " + launch;
+		payload = Map();
+		if(launch.containKey("code") == true)
+		{
+			status = launch.get("code");
+		}
+		else
+		{
+			status = launch.get("id");
+			payload.put("Converted",true);
+		}
+		payload.put("Conversion_Responce",status);
+	}
+	update_launch = zoho.crm.updateRecord("Contacts",contact_ID,payload);
+	info "Contact commit: " + update_launch;
+}
+return "";
