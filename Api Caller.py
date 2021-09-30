@@ -1,4 +1,4 @@
-url = 'https://www.zohoapis.eu/crm/v2/functions/mass_update_recruit_records_contacts/actions/execute?auth_type=apikey&zapikey=1003.96a9752a3baf2798f1fc233bf270f413.68e027025f91915074e9042a6b4b71a8'
+url = 'https://www.zohoapis.eu/crm/v2/functions/mass_update_recruit_records_contacts/actions/execute?auth_type=apikey&zapikey=<api-key>'
 runs = 130
 import time
 import requests
