@@ -1,0 +1,106 @@
+void Runtime.Import_Data()
+{
+	payload = List();
+	payload2 = List();
+	payload_meetings = List();
+	payload_meetings2 = List();
+	proc_list = importation_form[Processed_Time == null && Comment_Processed == true] range from 1 to 200;
+	count = 0;
+	for each  entry in proc_list
+	{
+		count = count + 1;
+		package = Map();
+		info "Activity: " + entry.Activity_Number;
+		if(entry.Comment_Field == "NULL")
+		{
+			entry.Comment_Field="";
+		}
+		if(entry.Type == "call")
+		{
+			crm_search = ifnull(zoho.crm.searchRecords("Calls","IP_Call_No:equals:" + entry.Activity_Number),{});
+			// 		crm_search = ifnull(zoho.crm.searchRecords("Calls", "IP_Call_No:equals:1234"),"");
+			info "crm call search: " + crm_search.toString();
+			if(crm_search != {} && crm_search.toString().contains("{\"Call_Duration\":"))
+			{
+				info "Call found: " + crm_search.get(0).get("id");
+				entry.CRM_ID=crm_search.get(0).get("id");
+				package.put("id",crm_search.get(0).get("id"));
+				if(entry.Comment_Field != "")
+				{
+					package.put("Description",entry.Comment_Field);
+				}
+				package.put("CCROwnerCall",entry.IP_Owner);
+				if(count <= 100)
+				{
+					payload.add(package);
+				}
+				else
+				{
+					payload2.add(package);
+				}
+			}
+			entry.Processed_Time=now;
+		}
+		else if(entry.Type == "meeting")
+		{
+			crm_search2 = ifnull(zoho.crm.searchRecords("Events","IP_Meeting_No:equals:" + entry.Activity_Number),{});
+			info "crm meeting search: " + crm_search2.toString();
+			if(crm_search2 != {} && crm_search2.toString().contains("{\"All_day\":"))
+			{
+				info "Meeting found: " + crm_search2.get(0).get("id");
+				entry.CRM_ID=crm_search2.get(0).get("id");
+				package.put("id",crm_search2.get(0).get("id"));
+				if(entry.Comment_Field != "")
+				{
+					package.put("Description",entry.Comment_Field);
+				}
+				package.put("CCROwnermeet",entry.IP_Owner);
+				if(count <= 100)
+				{
+					payload_meetings.add(package);
+				}
+				else
+				{
+					payload_meetings2.add(package);
+				}
+			}
+			entry.Processed_Time=now;
+		}
+	}
+	if(payload.isEmpty() == false)
+	{
+		crm_update_calls = zoho.crm.bulkUpdate("Calls",payload);
+		info crm_update_calls;
+	}
+	else
+	{
+		info "call payload 1 blank";
+	}
+	if(payload2.isEmpty() == false)
+	{
+		crm_update_calls2 = zoho.crm.bulkUpdate("Calls",payload2);
+		info crm_update_calls2;
+	}
+	else
+	{
+		info "call payload 2 blank";
+	}
+	if(payload_meetings.isEmpty() == false)
+	{
+		crm_update_meetings = zoho.crm.bulkUpdate("Events",payload_meetings);
+		info crm_update_meetings;
+	}
+	else
+	{
+		info "meeting payload 1 blank";
+	}
+	if(payload_meetings2.isEmpty() == false)
+	{
+		crm_update_meetings2 = zoho.crm.bulkUpdate("Events",payload_meetings2);
+		info crm_update_meetings2;
+	}
+	else
+	{
+		info "meeting payload 2 blank";
+	}
+}
